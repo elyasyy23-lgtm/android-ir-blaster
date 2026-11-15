@@ -46,7 +46,7 @@ jobs:
           db = sqlite3.connect("assets/db/irblaster.sqlite")
           n = db.execute("SELECT COUNT(*) FROM keys WHERE id=900001").fetchone()[0]
           print("custom keys:", n)
-          assert n == 17, "custom remote missing from the generated DB"
+          assert n == 18, "custom remote missing from the generated DB"
           PY
 
       - name: Install dependencies
@@ -88,7 +88,11 @@ jobs:
             - New **IR Log** tab: every transmitted signal, with protocol,
               hex code, frequency, button name and timestamp.
             - Custom remote **SAMSUNG BN59-01010A** in the finder database
-              (17 buttons: power, volume, mute, channel, d-pad, menu, source, info).
+              (18 buttons: power x3 address variants, volume, mute, channel,
+              d-pad, menu, source, info) using the real Samsung TV code set
+              (NECx2/Samsung32, E0E0 family).
+            - IR Log now shows the protocol and hex of finder and universal-power
+              sends (it used to log those as a blank "Raw signal").
 
             Signed with the CI debug key, so uninstall any earlier IR Blaster
             before installing this one.

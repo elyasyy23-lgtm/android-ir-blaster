@@ -708608,28 +708608,33 @@ INSERT INTO models VALUES('XCOM','X - SAT 310',7171);
 INSERT INTO models VALUES('XCOM','X SAT',7171);
 INSERT INTO models VALUES('VINCHI','LE32-4140HD',210);
 -- ===== CUSTOM REMOTES (owner-added) =====
--- Samsung BN59-01010A | protocol Samsung36 | POWER 0x8890099 (verified on device)
+-- Samsung BN59-01010A — real Samsung TV command set, protocol NECx2 (Samsung32, 32-bit).
+-- The earlier 0x8890099 family is Samsung36 (36-bit, mid-frame gap) from a projector/display
+-- remote; a Samsung TV cannot decode it, so every button was ignored.
+-- Three POWER variants identify the TV's address family in one test:
+--   E0E0 = canonical Samsung TV, 0707 = older Samsungs, A0A0 = some Samsung A/V sets.
 INSERT OR IGNORE INTO brands VALUES('SAMSUNG');
 INSERT OR IGNORE INTO remotes (id) VALUES(900001);
 INSERT OR IGNORE INTO models VALUES('SAMSUNG','BN59-01010A',900001);
 INSERT OR REPLACE INTO keys VALUES
-  (900001,'POWER','8890099','Samsung36'),
-  (900001,'POWER OFF','8890019','Samsung36'),
-  (900001,'VOL+','88900E0','Samsung36'),
-  (900001,'VOL-','88900D0','Samsung36'),
-  (900001,'MUTE','88900F0','Samsung36'),
-  (900001,'CH+','88900A3','Samsung36'),
-  (900001,'CH-','8890063','Samsung36'),
-  (900001,'UP','8890006','Samsung36'),
-  (900001,'DOWN','8890086','Samsung36'),
-  (900001,'LEFT','88900A6','Samsung36'),
-  (900001,'RIGHT','8890046','Samsung36'),
-  (900001,'OK','8890016','Samsung36'),
-  (900001,'MENU','8890058','Samsung36'),
-  (900001,'RETURN','889001A','Samsung36'),
-  (900001,'EXIT','88900B4','Samsung36'),
-  (900001,'SOURCE','8890080','Samsung36'),
-  (900001,'INFO','88900F8','Samsung36');
+  (900001,'POWER','E0E040BF','NECx2'),
+  (900001,'POWER (0707)','070702FD','NECx2'),
+  (900001,'POWER (A0A0)','A0A040BF','NECx2'),
+  (900001,'VOL+','E0E0E01F','NECx2'),
+  (900001,'VOL-','E0E0D02F','NECx2'),
+  (900001,'MUTE','E0E0F00F','NECx2'),
+  (900001,'CH+','E0E012ED','NECx2'),
+  (900001,'CH-','E0E010EF','NECx2'),
+  (900001,'UP','E0E006F9','NECx2'),
+  (900001,'DOWN','E0E08679','NECx2'),
+  (900001,'LEFT','E0E046B9','NECx2'),
+  (900001,'RIGHT','E0E0E619','NECx2'),
+  (900001,'OK','E0E016E9','NECx2'),
+  (900001,'MENU','E0E058A7','NECx2'),
+  (900001,'RETURN','E0E01AE5','NECx2'),
+  (900001,'EXIT','E0E0B44B','NECx2'),
+  (900001,'SOURCE','E0E038C7','NECx2'),
+  (900001,'INFO','E0E0F807','NECx2');
 -- ===== end custom remotes =====
 
 CREATE INDEX idx_keys_id ON "keys"(id);

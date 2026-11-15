@@ -849,14 +849,22 @@ class _IrFinderScreenState extends State<IrFinderScreen>
   }
 
   Future<void> _sendCandidateForRun(IrFinderCandidate c) async {
-    final enc = IrProtocolRegistry.encoderFor(c.protocolId);
-    final IrEncodeResult res = enc.encode(c.params);
-    final int freq = (res.frequencyHz <= 0) ? 38000 : res.frequencyHz;
-    await transmitRaw(freq, res.pattern);
     final remoteName = [c.dbBrand, c.dbModel]
         .whereType<String>()
         .where((v) => v.trim().isNotEmpty)
         .join(' · ');
+    // Finder sends raw patterns, so hand the log the real identity of the code —
+    // otherwise every finder press shows up as an anonymous "Raw signal".
+    final IrSendInfo info = IrSendInfo(
+      label: remoteName.isEmpty ? c.displayProtocol : remoteName,
+      protocol: c.displayProtocol,
+      hex: c.displayCode,
+      source: 'Finder',
+    );
+    final enc = IrProtocolRegistry.encoderFor(c.protocolId);
+    final IrEncodeResult res = enc.encode(c.params);
+    final int freq = (res.frequencyHz <= 0) ? 38000 : res.frequencyHz;
+    await transmitRaw(freq, res.pattern, info: info);
     showLastAction(
       title: '${c.displayProtocol} ${c.displayCode}',
       remoteName: remoteName.isEmpty ? null : remoteName,
@@ -864,7 +872,7 @@ class _IrFinderScreenState extends State<IrFinderScreen>
         final enc = IrProtocolRegistry.encoderFor(c.protocolId);
         final res = enc.encode(c.params);
         final freq = (res.frequencyHz <= 0) ? 38000 : res.frequencyHz;
-        await transmitRaw(freq, res.pattern);
+        await transmitRaw(freq, res.pattern, info: info);
       },
     );
   }

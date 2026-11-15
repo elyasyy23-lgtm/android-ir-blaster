@@ -119,10 +119,17 @@ class UniversalPowerController extends ChangeNotifier {
   }
 
   Future<void> _send(PowerCode code) async {
+    // Name the code in the IR log — a sweep is useless if it logs anonymous raw sends.
+    final IrSendInfo info = IrSendInfo(
+      label: code.label,
+      protocol: code.protocolId,
+      hex: code.hexCode,
+      source: 'Universal Power',
+    );
     final raw = code.rawPattern;
     final int? rawFreq = code.frequencyHz;
     if (raw != null && rawFreq != null && rawFreq > 0) {
-      await transmitRawCycles(rawFreq, raw);
+      await transmitRawCycles(rawFreq, raw, info: info);
       return;
     }
     final params = buildParamsForProtocol(
@@ -132,6 +139,6 @@ class UniversalPowerController extends ChangeNotifier {
     final enc = IrProtocolRegistry.encoderFor(code.protocolId);
     final res = enc.encode(params);
     final int freqHz = res.frequencyHz > 0 ? res.frequencyHz : 38000;
-    await transmitRaw(freqHz, res.pattern);
+    await transmitRaw(freqHz, res.pattern, info: info);
   }
 }
