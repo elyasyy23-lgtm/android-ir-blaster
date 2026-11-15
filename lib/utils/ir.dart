@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:irblaster_controller/ir/ir_protocol_registry.dart';
+import 'package:irblaster_controller/state/signal_log.dart';
 import 'package:irblaster_controller/utils/ir_transmitter_platform.dart';
 import 'remote.dart';
 
@@ -9,6 +10,78 @@ const platform = MethodChannel('org.nslabs/irtransmitter');
 const int kDefaultNecFrequencyHz = 38000;
 const int kMinIrFrequencyHz = 15000;
 const int kMaxIrFrequencyHz = 60000;
+
+/// Everything the in-app signal log needs to describe a transmission.
+@immutable
+class IrSendInfo {
+  const IrSendInfo({
+    required this.label,
+    required this.protocol,
+    this.hex,
+    this.source = 'Remote',
+  });
+
+  final String label;
+  final String protocol;
+  final String? hex;
+
+  /// Where the send came from: Remote, Signal Tester, Macro, ...
+  final String source;
+}
+
+String _hexOf(int code) => code.toRadixString(16).toUpperCase();
+
+/// Human name of a button; text labels are stored in [IRButton.image].
+String irButtonLabel(IRButton button) {
+  final String raw = button.image.trim();
+  if (raw.isEmpty) return 'Button';
+  if (!button.isImage) return raw;
+  final String cleaned = raw.replaceAll('\\', '/');
+  final List<String> parts = cleaned.split('/');
+  final String last = parts.isEmpty ? raw : parts.last;
+  final int dot = last.lastIndexOf('.');
+  final String base = dot > 0 ? last.substring(0, dot) : last;
+  return base.isEmpty ? 'Button' : base;
+}
+
+/// Describes how [button] is transmitted (best effort, before encoding).
+IrSendInfo describeIrButton(IRButton button, {String source = 'Remote'}) {
+  final String protocolId = button.protocol?.trim() ?? '';
+  final String rawData = button.rawData?.trim() ?? '';
+  final String protocol;
+  if (protocolId.isNotEmpty) {
+    protocol = protocolId;
+  } else if (rawData.isNotEmpty) {
+    protocol = isNecConfigString(rawData) ? 'NEC (custom timings)' : 'RAW';
+  } else if (button.code != null) {
+    protocol = 'NEC';
+  } else {
+    protocol = 'RAW';
+  }
+  return IrSendInfo(
+    label: irButtonLabel(button),
+    protocol: protocol,
+    hex: button.code == null ? null : _hexOf(button.code!),
+    source: source,
+  );
+}
+
+void _logSend(
+  IrSendInfo info,
+  int frequencyHz,
+  int patternLength, {
+  Object? error,
+}) {
+  recordIrSend(
+    label: info.label,
+    protocol: info.protocol,
+    hex: info.hex,
+    frequencyHz: frequencyHz,
+    patternLength: patternLength,
+    source: info.source,
+    error: error,
+  );
+}
 
 class NECParams {
   final int headerMark;
@@ -243,46 +316,69 @@ List<int> _parseRawPattern(String rawData, {required String where}) {
   return pattern;
 }
 
-Future<void> transmit(int code) async {
+Future<void> transmit(int code, {IrSendInfo? info}) async {
   final pattern = convertNECtoList(code);
   _validatePattern(pattern, where: 'hexPattern');
+  final IrSendInfo sendInfo = info ??
+      IrSendInfo(
+        label: 'NEC ${_hexOf(code)}',
+        protocol: 'NEC',
+        hex: _hexOf(code),
+        source: 'Signal Tester',
+      );
   try {
     await platform.invokeMethod("transmit", {"list": pattern});
-  } on PlatformException {
+    _logSend(sendInfo, kDefaultNecFrequencyHz, pattern.length);
+  } on PlatformException catch (e) {
     // Let the caller display hardware failures without creating crash reports.
+    _logSend(sendInfo, kDefaultNecFrequencyHz, pattern.length,
+        error: e.message ?? e.code);
     rethrow;
   } catch (e, st) {
     _reportFlutterError('transmit()', e, st);
+    _logSend(sendInfo, kDefaultNecFrequencyHz, pattern.length, error: e);
     rethrow;
   }
 }
 
-Future<void> transmitRaw(int frequency, List<int> pattern) async {
+Future<void> transmitRaw(int frequency, List<int> pattern,
+    {IrSendInfo? info}) async {
   _validateFrequency(frequency);
   _validatePattern(pattern, where: 'rawPattern');
+  final IrSendInfo sendInfo =
+      info ?? IrSendInfo(label: 'Raw signal', protocol: 'RAW', source: 'Raw');
   try {
     await platform
         .invokeMethod("transmitRaw", {"frequency": frequency, "list": pattern});
-  } on PlatformException {
+    _logSend(sendInfo, frequency, pattern.length);
+  } on PlatformException catch (e) {
+    _logSend(sendInfo, frequency, pattern.length, error: e.message ?? e.code);
     rethrow;
   } catch (e, st) {
     _reportFlutterError('transmitRaw()', e, st);
+    _logSend(sendInfo, frequency, pattern.length, error: e);
     rethrow;
   }
 }
 
-Future<void> transmitRawCycles(int frequency, List<int> pattern) async {
+Future<void> transmitRawCycles(int frequency, List<int> pattern,
+    {IrSendInfo? info}) async {
   _validateFrequency(frequency);
   _validatePattern(pattern, where: 'rawCycles');
+  final IrSendInfo sendInfo = info ??
+      IrSendInfo(label: 'Raw signal', protocol: 'RAW (cycles)', source: 'Raw');
   try {
     await platform.invokeMethod(
       "transmitRawCycles",
       {"frequency": frequency, "list": pattern},
     );
-  } on PlatformException {
+    _logSend(sendInfo, frequency, pattern.length);
+  } on PlatformException catch (e) {
+    _logSend(sendInfo, frequency, pattern.length, error: e.message ?? e.code);
     rethrow;
   } catch (e, st) {
     _reportFlutterError('transmitRawCycles()', e, st);
+    _logSend(sendInfo, frequency, pattern.length, error: e);
     rethrow;
   }
 }
@@ -411,7 +507,9 @@ Future<void> sendIR(
   IRButton button, {
   bool repeat = false,
   void Function(IrPreview signal)? onEncoded,
+  String source = 'Remote',
 }) async {
+  final IrSendInfo sendInfo = describeIrButton(button, source: source);
   // Observe the actual encoding, rather than encoding again (toggle protocols).
   Future<void> sendRaw(int frequency, List<int> pattern) async {
     _validateFrequency(frequency);
@@ -421,7 +519,7 @@ Future<void> sendIR(
       pattern: List<int>.unmodifiable(pattern),
       mode: 'transmission',
     ));
-    await transmitRaw(frequency, pattern);
+    await transmitRaw(frequency, pattern, info: sendInfo);
   }
   if (button.protocol != null && button.protocol!.trim().isNotEmpty) {
     final id = button.protocol!.trim();
@@ -457,6 +555,14 @@ Future<void> sendIR(
         family: family,
         opaqueFrameBase64: opaqueFrameBase64,
         opaqueMeta: opaqueMeta,
+      );
+      recordIrSend(
+        label: sendInfo.label,
+        protocol: '${sendInfo.protocol} (USB replay)',
+        hex: sendInfo.hex,
+        frequencyHz: button.frequency ?? 0,
+        source: sendInfo.source,
+        error: ok ? null : 'LEARNED_REPLAY_FAILED',
       );
       if (!ok) {
         throw PlatformException(
@@ -499,7 +605,7 @@ Future<void> sendIR(
       pattern: List<int>.unmodifiable(convertNECtoList(button.code!)),
       mode: 'legacy_nec_default',
     ));
-    await transmit(button.code!);
+    await transmit(button.code!, info: sendInfo);
     return;
   }
 

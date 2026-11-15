@@ -708607,6 +708607,31 @@ INSERT INTO models VALUES('XCOM','X - 310',7171);
 INSERT INTO models VALUES('XCOM','X - SAT 310',7171);
 INSERT INTO models VALUES('XCOM','X SAT',7171);
 INSERT INTO models VALUES('VINCHI','LE32-4140HD',210);
+-- ===== CUSTOM REMOTES (owner-added) =====
+-- Samsung BN59-01010A | protocol Samsung36 | POWER 0x8890099 (verified on device)
+INSERT OR IGNORE INTO brands VALUES('SAMSUNG');
+INSERT OR IGNORE INTO remotes (id) VALUES(900001);
+INSERT OR IGNORE INTO models VALUES('SAMSUNG','BN59-01010A',900001);
+INSERT OR REPLACE INTO keys VALUES
+  (900001,'POWER','8890099','Samsung36'),
+  (900001,'POWER OFF','8890019','Samsung36'),
+  (900001,'VOL+','88900E0','Samsung36'),
+  (900001,'VOL-','88900D0','Samsung36'),
+  (900001,'MUTE','88900F0','Samsung36'),
+  (900001,'CH+','88900A3','Samsung36'),
+  (900001,'CH-','8890063','Samsung36'),
+  (900001,'UP','8890006','Samsung36'),
+  (900001,'DOWN','8890086','Samsung36'),
+  (900001,'LEFT','88900A6','Samsung36'),
+  (900001,'RIGHT','8890046','Samsung36'),
+  (900001,'OK','8890016','Samsung36'),
+  (900001,'MENU','8890058','Samsung36'),
+  (900001,'RETURN','889001A','Samsung36'),
+  (900001,'EXIT','88900B4','Samsung36'),
+  (900001,'SOURCE','8890080','Samsung36'),
+  (900001,'INFO','88900F8','Samsung36');
+-- ===== end custom remotes =====
+
 CREATE INDEX idx_keys_id ON "keys"(id);
 CREATE INDEX idx_models_brand ON models(brand);
 COMMIT;

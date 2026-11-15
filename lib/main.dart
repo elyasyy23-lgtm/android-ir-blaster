@@ -12,6 +12,7 @@ import 'package:irblaster_controller/state/haptics.dart';
 import 'package:irblaster_controller/state/orientation_pref.dart';
 import 'package:irblaster_controller/state/remote_display_prefs.dart';
 import 'package:irblaster_controller/state/startup_prefs.dart';
+import 'package:irblaster_controller/state/signal_log.dart';
 import 'package:irblaster_controller/state/transmitter_prefs.dart';
 import 'package:irblaster_controller/state/remotes_state.dart';
 import 'package:irblaster_controller/state/macros_state.dart';
@@ -60,6 +61,7 @@ Future<void> _startApp() async {
       RemoteDisplayController.instance.load(),
       StartupPrefsController.instance.load(),
       TransmitterPrefs.instance.load(),
+      SignalLog.instance.load(),
       // lazy import to avoid circulars; we refer by string to keep tool happy
     ]);
   } catch (e, st) {

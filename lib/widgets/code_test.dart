@@ -19,8 +19,19 @@ class CodeTest extends StatefulWidget {
 
 void bruteforce(int n, bool send) {
   if (send) {
-    transmit(int.parse((deviceCodeString + commandString).replaceAll(" ", ""),
-        radix: 16));
+    final int code = int.parse(
+        (deviceCodeString + commandString).replaceAll(" ", ""),
+        radix: 16);
+    transmit(
+      code,
+      info: IrSendInfo(
+        label: 'NEC ${deviceCodeString.trim()} ${commandString.trim()}'
+            .replaceAll(RegExp(r'\s+'), ' '),
+        protocol: 'NEC',
+        hex: code.toRadixString(16).toUpperCase(),
+        source: 'Signal Tester',
+      ),
+    );
   }
 
   int command = int.parse(commandString.substring(0, 2), radix: 16);

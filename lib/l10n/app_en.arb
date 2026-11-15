@@ -57,6 +57,28 @@
   "remotesNavLabel": "Remotes",
   "macrosNavLabel": "Macros",
   "signalTesterNavLabel": "Signal Tester",
+  "signalLogNavLabel": "IR Log",
+  "signalLogTitle": "IR signal log",
+  "signalLogEntryCount": "{count} signals",
+  "@signalLogEntryCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "signalLogEmptyTitle": "No signals yet",
+  "signalLogEmptyBody": "Press a remote button or run the Signal Tester. Every transmitted signal appears here with its protocol, hex code, frequency and button name.",
+  "signalLogFieldProtocol": "Protocol",
+  "signalLogFieldHex": "Hex code",
+  "signalLogFieldFrequency": "Frequency",
+  "signalLogFieldSource": "Source",
+  "signalLogFailed": "Failed",
+  "signalLogCopyTooltip": "Copy log",
+  "signalLogCopied": "Log copied to the clipboard",
+  "signalLogClearTitle": "Clear all logs?",
+  "signalLogClearBody": "Every recorded signal is removed from this device. This cannot be undone.",
+  "signalLogClearDone": "Log cleared",
   "settingsTitle": "Settings",
   "remoteNoIrEmitterTitle": "IR emitter unavailable",
   "remoteNoIrEmitterMessage": "No usable IR emitter was detected.",

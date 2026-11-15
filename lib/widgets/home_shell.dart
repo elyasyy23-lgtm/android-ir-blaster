@@ -16,6 +16,7 @@ import 'package:irblaster_controller/widgets/macros_tab.dart';
 import 'package:irblaster_controller/widgets/remote_list.dart';
 import 'package:irblaster_controller/widgets/remote_view.dart';
 import 'package:irblaster_controller/widgets/settings_screen.dart';
+import 'package:irblaster_controller/widgets/signal_log_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeShell extends StatefulWidget {
@@ -31,10 +32,14 @@ class _HomeShellState extends State<HomeShell> {
 
   int _index = 0;
 
+  /// Tab order lives in `_pages`; keep this in sync with it.
+  static const int _settingsTabIndex = 4;
+
   final List<Widget> _pages = const <Widget>[
     RemoteList(),
     MacrosTab(),
     IrFinderScreen(),
+    SignalLogScreen(),
     SettingsScreen(),
   ];
 
@@ -455,7 +460,7 @@ class _HomeShellState extends State<HomeShell> {
                           child: OutlinedButton.icon(
                             onPressed: () {
                               Navigator.of(ctx).pop();
-                              setState(() => _index = 3);
+                              setState(() => _index = _settingsTabIndex);
                               Haptics.selectionClick();
                             },
                             icon: const Icon(Icons.tune_rounded),
@@ -607,7 +612,7 @@ class _HomeShellState extends State<HomeShell> {
                         ),
                         FilledButton.tonalIcon(
                           onPressed: () {
-                            setState(() => _index = 3);
+                            setState(() => _index = _settingsTabIndex);
                             Haptics.selectionClick();
                           },
                           icon: const Icon(Icons.settings_rounded),
@@ -667,6 +672,11 @@ class _HomeShellState extends State<HomeShell> {
             icon: Icon(Icons.radar_outlined),
             selectedIcon: Icon(Icons.radar),
             label: context.l10n.signalTesterNavLabel,
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: context.l10n.signalLogNavLabel,
           ),
           NavigationDestination(
             icon: UpdateBadge(child: Icon(Icons.settings_outlined)),

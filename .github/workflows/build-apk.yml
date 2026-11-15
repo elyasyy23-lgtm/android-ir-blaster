@@ -1,0 +1,80 @@
+name: build-apk
+
+# Builds an installable APK for the patched android-ir-blaster
+# (finder DB regenerated from assets/db_src/irblaster.sql on every run).
+# Debug build = signed with CI's debug keystore, so no key.properties needed.
+#
+# Trigger: Actions tab -> "build-apk" -> Run workflow, or push to main.
+# Download: Artifacts (logged in) — or push a tag "v*" to also get a Release asset.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          # If the build complains about an SDK constraint, pin instead:
+          # flutter-version: '3.41.0'   (pubspec.lock needs flutter >= 3.41.0)
+
+      # MUST run before flutter build: the APK bundles assets/db/irblaster.sqlite
+      # exactly as it sits on disk (gitignored, so CI has to generate it).
+      - name: Build finder database
+        run: python3 tools/build_ir_db.py
+
+      - name: Sanity-check the DB
+        run: |
+          python3 - <<'PY'
+          import sqlite3
+          db = sqlite3.connect("assets/db/irblaster.sqlite")
+          n = db.execute("SELECT COUNT(*) FROM keys WHERE id=900001").fetchone()[0]
+          print("custom keys:", n)
+          assert n == 17, "custom remote missing from the generated DB"
+          PY
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # ARB files are the string source; regenerating here keeps the build
+      # honest even if the committed app_localizations*.dart files lag behind.
+      - name: Regenerate localizations
+        run: |
+          flutter gen-l10n
+          git --no-pager diff --stat -- lib/l10n || true
+
+      - name: Build debug APK (arm64 only = smallest)
+        run: flutter build apk --debug --target-platform android-arm64
+
+      - name: Show what shipped
+        run: |
+          ls -lh build/app/outputs/flutter-apk/
+          unzip -l build/app/outputs/flutter-apk/app-debug.apk | grep irblaster.sqlite
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: irblaster-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 30
+
+      - name: Publish as Release asset (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/app-debug.apk
