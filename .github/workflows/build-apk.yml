@@ -67,14 +67,30 @@ jobs:
           ls -lh build/app/outputs/flutter-apk/
           unzip -l build/app/outputs/flutter-apk/app-debug.apk | grep irblaster.sqlite
 
+      - name: Stage a readable file name
+        run: cp build/app/outputs/flutter-apk/app-debug.apk IR-Blaster-3.4.6-log-debug.apk
+
       - uses: actions/upload-artifact@v4
         with:
           name: irblaster-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: IR-Blaster-3.4.6-log-debug.apk
           retention-days: 30
 
       - name: Publish as Release asset (tag builds only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: build/app/outputs/flutter-apk/app-debug.apk
+          files: IR-Blaster-3.4.6-log-debug.apk
+          name: IR Blaster 3.4.6 + IR Log + BN59-01010A
+          body: |
+            Modified build of IR Blaster 3.4.6 (arm64-v8a, debug-signed).
+
+            - New **IR Log** tab: every transmitted signal, with protocol,
+              hex code, frequency, button name and timestamp.
+            - Custom remote **SAMSUNG BN59-01010A** in the finder database
+              (17 buttons: power, volume, mute, channel, d-pad, menu, source, info).
+
+            Signed with the CI debug key, so uninstall any earlier IR Blaster
+            before installing this one.
+
+            Based on https://github.com/iodn/android-ir-blaster (GPLv3).
