@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:irblaster_controller/l10n/l10n.dart';
 import 'package:irblaster_controller/state/signal_log.dart';
+import 'package:irblaster_controller/utils/ir_keep_alive.dart';
 
 /// Shows every IR signal the app has transmitted, newest first.
 class SignalLogScreen extends StatelessWidget {
@@ -107,19 +108,146 @@ class SignalLogScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: entries.isEmpty
-              ? _EmptyState()
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-                  itemCount: entries.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) => _LogCard(
-                    entry: entries[index],
-                    timeLabel: _time(entries[index].at),
-                  ),
-                ),
+          body: Column(
+            children: <Widget>[
+              const _SurvivalBanner(),
+              Expanded(
+                child: entries.isEmpty
+                    ? _EmptyState()
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+                        itemCount: entries.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) => _LogCard(
+                          entry: entries[index],
+                          timeLabel: _time(entries[index].at),
+                        ),
+                      ),
+              ),
+            ],
+          ),
         );
       },
+    );
+  }
+}
+
+/// Explains (and fixes) the one thing that really stops a long test on MIUI:
+/// the app being excluded from battery optimization. Also shows the survival
+/// counters so "the service kept sending" is provable, not a claim.
+class _SurvivalBanner extends StatefulWidget {
+  const _SurvivalBanner();
+
+  @override
+  State<_SurvivalBanner> createState() => _SurvivalBannerState();
+}
+
+class _SurvivalBannerState extends State<_SurvivalBanner> {
+  bool _allowed = true;
+  bool _loaded = false;
+  int _nativeSends = 0;
+  int _revives = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final List<dynamic> results = await Future.wait(<Future<dynamic>>[
+      IrKeepAlive.isIgnoringBatteryOptimizations,
+      IrKeepAlive.guardState(),
+    ]);
+    if (!mounted) return;
+    final Map<String, dynamic> state =
+        (results[1] as Map<String, dynamic>?) ?? const <String, dynamic>{};
+    setState(() {
+      _allowed = results[0] as bool? ?? true;
+      _nativeSends = state['nativeSends'] is int ? state['nativeSends'] as int : 0;
+      _revives = state['revives'] is int ? state['revives'] as int : 0;
+      _loaded = true;
+    });
+  }
+
+  Future<void> _openSettings() async {
+    await IrKeepAlive.requestIgnoreBatteryOptimizations();
+    // Give the user a moment in the system screen, then re-read the state.
+    await Future<void>.delayed(const Duration(seconds: 2));
+    await _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_loaded) return const SizedBox.shrink();
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme cs = theme.colorScheme;
+    final bool warn = !_allowed;
+    final Color tint = warn ? cs.errorContainer : cs.surfaceContainerHighest;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(
+                warn ? Icons.battery_alert_outlined : Icons.shield_outlined,
+                size: 18,
+                color: warn ? cs.error : cs.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  warn
+                      ? context.l10n.signalLogBatteryTitle
+                      : context.l10n.signalLogBatteryOk,
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            warn
+                ? context.l10n.signalLogBatteryBody
+                : context.l10n.signalLogSurvivalNote,
+            style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          if (_nativeSends > 0 || _revives > 0) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              <String>[
+                if (_nativeSends > 0)
+                  context.l10n.signalLogNativeSends(_nativeSends),
+                if (_revives > 0) context.l10n.signalLogRevives(_revives),
+              ].join(' · '),
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: cs.primary,
+              ),
+            ),
+          ],
+          if (warn) ...<Widget>[
+            const SizedBox(height: 10),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FilledButton.tonalIcon(
+                onPressed: _openSettings,
+                icon: const Icon(Icons.settings_outlined, size: 18),
+                label: Text(context.l10n.signalLogBatteryAction),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

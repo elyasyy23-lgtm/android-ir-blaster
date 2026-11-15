@@ -456,10 +456,22 @@ class IrFinderRunController extends ChangeNotifier {
     _keepAlivePoll?.cancel();
     _keepAlivePoll = Timer.periodic(const Duration(seconds: 2), (Timer t) {
       unawaited(_checkKeepAliveStop());
+      _beat();
     });
   }
 
+  /// Heartbeat: proves Dart is alive and lets the native side restart the
+  /// foreground service if the system killed it (finder sends need Dart, so the
+  /// native fallback can only hold the process up and be honest about it).
+  void _beat() {
+    if (_disposed || !running || paused) return;
+    unawaited(
+      IrKeepAlive.beat(mode: IrKeepAlive.modePlain, sent: attempted),
+    );
+  }
+
   void _updateKeepAlive() {
+    _beat();
     if (!running || paused) return;
     if (!IrKeepAlive.shouldUpdate(attempted)) return;
     unawaited(IrKeepAlive.update(title: _keepAliveTitle(), text: _keepAliveText()));

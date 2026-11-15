@@ -20,6 +20,7 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.VibrationAttributes
@@ -625,10 +626,27 @@ class MainActivity : FlutterActivity() {
             val args = call.arguments as? Map<*, *>
             val title = (args?.get("title") as? String)?.trim().orEmpty()
             val text = (args?.get("text") as? String).orEmpty()
+            val mode = (args?.get("mode") as? String)?.takeIf { it.isNotBlank() }
+                ?: IrGuard.MODE_PLAIN
+            val device = (args?.get("device") as? Number)?.toInt() ?: 0
+            val command = (args?.get("command") as? Number)?.toInt() ?: 0
+            val sent = (args?.get("sent") as? Number)?.toInt() ?: 0
             when (call.method) {
                 "start" -> {
                     requestNotificationPermissionIfNeeded()
-                    IrKeepAliveService.start(applicationContext, title.ifBlank { "IR test running" }, text)
+                    IrKeepAliveService.start(
+                        applicationContext,
+                        title.ifBlank { "IR test running" },
+                        text,
+                        mode,
+                        device,
+                        command,
+                        sent,
+                    )
+                    result.success(true)
+                }
+                "beat" -> {
+                    IrKeepAliveService.beat(applicationContext, mode, device, command, sent)
                     result.success(true)
                 }
                 "update" -> {
@@ -645,12 +663,82 @@ class MainActivity : FlutterActivity() {
                     IrKeepAliveService.clearStopRequest()
                     result.success(true)
                 }
+                // Diagnostics for the app's own IR Log screen: proves whether the
+                // native fallback really took over after a kill.
+                "guardState" -> result.success(guardStateMap())
+                // The native fallback logs the sends Dart could not log itself.
+                "readNativeLog" -> result.success(IrGuard.drainNativeLog(applicationContext))
+                "clearNativeLog" -> {
+                    IrGuard.clearNativeLog(applicationContext)
+                    result.success(true)
+                }
+                "isIgnoringBatteryOptimizations" -> result.success(isIgnoringBatteryOptimizations())
+                "requestIgnoreBatteryOptimizations" -> {
+                    result.success(openBatteryOptimizationSettings())
+                }
                 else -> result.notImplemented()
             }
         }
 
         emitTxStatus("startup_done")
         emitTxStatusDelayed("startup_done_delayed", 350L)
+    }
+
+    /**
+     * Diagnostics for the survival ladder. Dart shows these numbers in the IR
+     * Log footer so "did the native fallback really take over?" is provable
+     * instead of a feeling.
+     */
+    private fun guardStateMap(): Map<String, Any?> {
+        val ctx = applicationContext
+        return mapOf(
+            "active" to IrGuard.isActive(ctx),
+            "mode" to IrGuard.mode(ctx),
+            "running" to IrKeepAliveService.running,
+            "beatAgeMs" to IrGuard.ageMs(ctx).coerceAtMost(Int.MAX_VALUE.toLong()),
+            "device" to IrGuard.sweepDevice(ctx),
+            "command" to IrGuard.sweepCommand(ctx),
+            "sent" to IrGuard.sweepSent(ctx),
+            "nativeSends" to IrGuard.nativeSends(ctx),
+            "revives" to IrGuard.revives(ctx),
+            "processStarts" to IrGuard.processStarts(ctx),
+            "lastAlarmWall" to IrGuard.lastAlarmWall(ctx),
+            "ignoringBatteryOptimizations" to isIgnoringBatteryOptimizations(),
+            "lastError" to IrGuard.lastError(ctx),
+        )
+    }
+
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        return try {
+            val power = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+            power.isIgnoringBatteryOptimizations(packageName)
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /**
+     * Opens the system list where the app can be excluded from battery
+     * optimization. The app-specific REQUEST_IGNORE_BATTERY_OPTIMIZATIONS dialog
+     * is avoided on purpose: that permission is restricted on Play.
+     */
+    private fun openBatteryOptimizationSettings(): Boolean {
+        val candidates = listOf(
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+            Intent("android.settings.APPLICATION_DETAILS_SETTINGS").apply {
+                data = android.net.Uri.parse("package:$packageName")
+            },
+            Intent(Settings.ACTION_SETTINGS),
+        )
+        for (intent in candidates) {
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+                return true
+            } catch (_: Throwable) {
+            }
+        }
+        return false
     }
 
     private fun handleUpdateDynamicShortcuts(call: MethodCall, result: MethodChannel.Result) {

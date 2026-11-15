@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/ir_keep_alive.dart';
+
 /// One IR transmission exactly as it went to the transmitter hardware.
 @immutable
 class SignalLogEntry {
@@ -102,6 +104,49 @@ class SignalLog extends ChangeNotifier {
   Future<void> add(SignalLogEntry entry) async {
     await load();
     _entries.insert(0, entry);
+    if (_entries.length > maxEntries) {
+      _entries.removeRange(maxEntries, _entries.length);
+    }
+    notifyListeners();
+    await _persist();
+  }
+
+  /// Merges the signals the NATIVE fallback sent while the Dart isolate was dead
+  /// (vendor task killer). The native buffer is drained, so calling this twice
+  /// cannot duplicate rows; rows are fingerprinted as a second safety net.
+  ///
+  /// This is what makes the IR log honest: a signal that left the emitter with
+  /// no Flutter code running still appears in the history, tagged `(native)`.
+  Future<void> syncNativeSends() async {
+    final List<Map<String, dynamic>> rows = await IrKeepAlive.drainNativeLog();
+    if (rows.isEmpty) return;
+    await load();
+    int added = 0;
+    for (final Map<String, dynamic> row in rows) {
+      final SignalLogEntry? parsed = SignalLogEntry.fromJson(row);
+      if (parsed == null) continue;
+      final SignalLogEntry entry = SignalLogEntry(
+        at: parsed.at,
+        label: parsed.label,
+        protocol: parsed.protocol,
+        hex: parsed.hex,
+        frequencyHz: parsed.frequencyHz,
+        patternLength: parsed.patternLength,
+        source: parsed.source.contains('(native)')
+            ? parsed.source
+            : '${parsed.source} (native)'.trim(),
+      );
+      final bool duplicate = _entries.any(
+        (SignalLogEntry e) =>
+            e.at.millisecondsSinceEpoch == entry.at.millisecondsSinceEpoch &&
+            e.hex == entry.hex,
+      );
+      if (duplicate) continue;
+      _entries.add(entry);
+      added++;
+    }
+    if (added == 0) return;
+    _entries.sort((a, b) => b.at.compareTo(a.at));
     if (_entries.length > maxEntries) {
       _entries.removeRange(maxEntries, _entries.length);
     }

@@ -11,6 +11,12 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Survival ladder for the long IR test: an exact alarm chain, a persisted
+         job and the boot/update broadcasts bring the service back after the
+         vendor task killer stopped it. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <!-- Declare which external ACTION_* intents your app will use -->
     <queries>
         <!-- User-import: pick an existing IR file -->
@@ -177,6 +183,27 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps a running IR test (signal sweep) alive in the background so signals keep being sent and logged." />
         </service>
+
+        <!-- Brings the guard service back after an exact alarm, a reboot or an
+             update. Not exported: nothing outside the app can trigger it. -->
+        <receiver
+            android:name=".IrGuardReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Persisted JobScheduler door: the OS keeps running this even after the
+             app process was killed, and re-registers it across reboots. -->
+        <service
+            android:name=".IrGuardJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <service
             android:name=".DeviceControlsService"

@@ -85,8 +85,12 @@ class CodeTestState extends State<CodeTest> {
       'NEC ${deviceCodeString.trim()} ${commandString.trim()}'
           .replaceAll(RegExp(r'\s+'), ' ');
 
+  /// First byte of "xx ~xx" as an int - the sweep position native code needs.
+  static int _byte(String pair) => int.parse(pair.substring(0, 2), radix: 16);
+
   /// Start/stop the 1 s sweep. While it runs a foreground service keeps the
-  /// isolate alive, so the sweep and the IR log continue in the background.
+  /// isolate alive, and its native fallback continues the sweep even if the
+  /// vendor task killer ends this isolate.
   Future<void> _toggleSweep() async {
     if (isBruteforcing) {
       _stopSweep();
@@ -101,6 +105,10 @@ class CodeTestState extends State<CodeTest> {
     await IrKeepAlive.start(
       title: _sweepTitle,
       text: '${_currentCodeLabel()} — keeps running when you leave the app',
+      mode: IrKeepAlive.modeNec,
+      device: _byte(deviceCodeString),
+      command: _byte(commandString),
+      sent: 0,
     );
     timer?.cancel();
     timer =
@@ -114,6 +122,13 @@ class CodeTestState extends State<CodeTest> {
       bruteforce(1, true);
     });
     _sent++;
+    // Heartbeat + position AFTER the send: native resumes at the next code.
+    unawaited(IrKeepAlive.beat(
+      mode: IrKeepAlive.modeNec,
+      device: _byte(deviceCodeString),
+      command: _byte(commandString),
+      sent: _sent,
+    ));
     unawaited(_pollStopRequest());
     if (IrKeepAlive.shouldUpdate(_sent)) {
       final elapsed =

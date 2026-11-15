@@ -61,7 +61,8 @@ Future<void> _startApp() async {
       RemoteDisplayController.instance.load(),
       StartupPrefsController.instance.load(),
       TransmitterPrefs.instance.load(),
-      SignalLog.instance.load(),
+      // History plus whatever the native fallback sent while we were dead.
+      SignalLog.instance.load().then((_) => SignalLog.instance.syncNativeSends()),
       // lazy import to avoid circulars; we refer by string to keep tool happy
     ]);
   } catch (e, st) {

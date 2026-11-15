@@ -79,6 +79,27 @@
   "signalLogClearTitle": "Clear all logs?",
   "signalLogClearBody": "Every recorded signal is removed from this device. This cannot be undone.",
   "signalLogClearDone": "Log cleared",
+  "signalLogSurvivalNote": "If the phone stops the app during a test, the background service keeps sending the sweep itself. Those signals appear here marked \"(native)\".",
+  "signalLogNativeSends": "{count} sent by the service",
+  "@signalLogNativeSends": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "signalLogRevives": "{count} system restarts",
+  "@signalLogRevives": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "signalLogBatteryTitle": "Allow running in the background",
+  "signalLogBatteryBody": "This phone can stop long tests. Set the app's battery usage to \"No restrictions\" and turn on Autostart.",
+  "signalLogBatteryAction": "Open settings",
+  "signalLogBatteryOk": "Background running is allowed",
   "settingsTitle": "Settings",
   "remoteNoIrEmitterTitle": "IR emitter unavailable",
   "remoteNoIrEmitterMessage": "No usable IR emitter was detected.",
