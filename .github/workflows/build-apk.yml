@@ -49,6 +49,28 @@ jobs:
           assert n == 18, "custom remote missing from the generated DB"
           PY
 
+      # Reuse ONE signing key for every build. Without this each run generates a
+      # fresh debug keystore, so Android refuses to install a new APK over the
+      # previous one and the owner has to uninstall (losing saved remotes).
+      - name: Set up stable signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.IRBLASTER_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.IRBLASTER_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.IRBLASTER_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.IRBLASTER_KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::notice::No IRBLASTER_KEYSTORE_BASE64 secret - falling back to a per-run debug key."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/irblaster-release.jks
+          cat > android/app/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=${KEY_ALIAS:-irblaster}
+          storeFile=irblaster-release.jks
+          EOF
+
       - name: Install dependencies
         run: flutter pub get
 
