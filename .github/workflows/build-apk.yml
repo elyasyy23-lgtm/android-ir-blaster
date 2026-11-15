@@ -29,10 +29,10 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          # Pinned: pubspec.lock needs flutter >= 3.41.0, and the project's Gradle
+          # wrapper is 8.13 (newer stables demand Gradle 9.3.1 and fail the build).
+          flutter-version: '3.41.9'
           cache: true
-          # If the build complains about an SDK constraint, pin instead:
-          # flutter-version: '3.41.0'   (pubspec.lock needs flutter >= 3.41.0)
 
       # MUST run before flutter build: the APK bundles assets/db/irblaster.sqlite
       # exactly as it sits on disk (gitignored, so CI has to generate it).
