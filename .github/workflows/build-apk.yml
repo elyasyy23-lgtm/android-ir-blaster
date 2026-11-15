@@ -68,20 +68,20 @@ jobs:
           unzip -l build/app/outputs/flutter-apk/app-debug.apk | grep irblaster.sqlite
 
       - name: Stage a readable file name
-        run: cp build/app/outputs/flutter-apk/app-debug.apk IR-Blaster-3.4.6-samsungtv-debug.apk
+        run: cp build/app/outputs/flutter-apk/app-debug.apk IR-Blaster-3.4.7-bg-debug.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: irblaster-debug-apk
-          path: IR-Blaster-3.4.6-samsungtv-debug.apk
+          path: IR-Blaster-3.4.7-bg-debug.apk
           retention-days: 30
 
       - name: Publish as Release asset (tag builds only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: IR-Blaster-3.4.6-samsungtv-debug.apk
-          name: IR Blaster 3.4.6 + IR Log + BN59-01010A
+          files: IR-Blaster-3.4.7-bg-debug.apk
+          name: IR Blaster 3.4.7 + IR Log + background testing
           body: |
             Modified build of IR Blaster 3.4.6 (arm64-v8a, debug-signed).
 
@@ -93,6 +93,11 @@ jobs:
               (NECx2/Samsung32, E0E0 family).
             - IR Log now shows the protocol and hex of finder and universal-power
               sends (it used to log those as a blank "Raw signal").
+            - **Background testing**: a foreground service keeps the signal tester
+              sweep and the finder run alive when the app is in the background.
+              The ongoing notification shows the current code and progress and has
+              a Stop action. Signals keep being sent and logged while you are in
+              another app or the screen is locked.
 
             Signed with the CI debug key, so uninstall any earlier IR Blaster
             before installing this one.

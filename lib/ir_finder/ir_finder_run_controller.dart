@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:irblaster_controller/ir_finder/ir_finder_models.dart';
 import 'package:irblaster_controller/ir_finder/ir_finder_prefs.dart';
 import 'package:irblaster_controller/ir_finder/ir_finder_search.dart';
+import 'package:irblaster_controller/utils/ir_keep_alive.dart';
 
 typedef IrFinderCandidateFetcher = Future<IrFinderCandidate?> Function(
     IrFinderRunController controller);
@@ -59,6 +60,9 @@ class IrFinderRunController extends ChangeNotifier {
 
   DateTime _lastPersistAt = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _persistDebounce;
+
+  /// Polls the notification's Stop action while a run is active.
+  Timer? _keepAlivePoll;
 
   IrFinderRunController({
     required this.fetchCandidate,
@@ -143,6 +147,7 @@ class IrFinderRunController extends ChangeNotifier {
     _schedulePersist();
 
     _scheduleTimer();
+    _startKeepAlive();
   }
 
   void pause() {
@@ -151,6 +156,7 @@ class IrFinderRunController extends ChangeNotifier {
     paused = true;
     _pauseRevision++;
     _cancelTimer();
+    _stopKeepAlive();
     notifyListeners();
     _schedulePersist();
   }
@@ -162,6 +168,7 @@ class IrFinderRunController extends ChangeNotifier {
     notifyListeners();
     _schedulePersist();
     _scheduleTimer();
+    _startKeepAlive();
   }
 
   Future<void> step() async {
@@ -189,6 +196,7 @@ class IrFinderRunController extends ChangeNotifier {
   }
 
   Future<void> stop({bool clearPersistedSession = false}) async {
+    _stopKeepAlive();
     if (!running && !paused) {
       if (clearPersistedSession) {
         await IrFinderPrefs.clearSession();
@@ -353,6 +361,7 @@ class IrFinderRunController extends ChangeNotifier {
         _advanceAfterSend();
       }
 
+      _updateKeepAlive();
       notifyListeners();
       _schedulePersist();
     } catch (e) {
@@ -413,8 +422,59 @@ class IrFinderRunController extends ChangeNotifier {
     _disposed = true;
     _generation++;
     _cancelTimer();
+    _stopKeepAlive();
     _persistDebounce?.cancel();
     _persistDebounce = null;
     super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Background keep-alive: a foreground service pins the isolate up so the run
+  // keeps sending and logging when the app is backgrounded.
+  // ---------------------------------------------------------------------------
+
+  String _keepAliveTitle() =>
+      mode == IrFinderMode.database ? 'IR finder running' : 'IR brute force running';
+
+  String _keepAliveText() {
+    final String base = mode == IrFinderMode.database
+        ? '${protocolId.toUpperCase()} · attempt $attempted'
+        : '${protocolId.toUpperCase()} · cursor ${bruteCursor.toRadixString(16).toUpperCase()} · attempt $attempted';
+    final String signal = lastCandidate?.dbLabel?.trim() ?? '';
+    final String head = signal.isEmpty ? base : '$signal · $base';
+    return '$head — keeps running when you leave the app';
+  }
+
+  void _startKeepAlive() {
+    if (_disposed || !running || paused) return;
+    unawaited(
+      IrKeepAlive.clearStopRequest().then((_) => IrKeepAlive.start(
+            title: _keepAliveTitle(),
+            text: _keepAliveText(),
+          )),
+    );
+    _keepAlivePoll?.cancel();
+    _keepAlivePoll = Timer.periodic(const Duration(seconds: 2), (Timer t) {
+      unawaited(_checkKeepAliveStop());
+    });
+  }
+
+  void _updateKeepAlive() {
+    if (!running || paused) return;
+    if (!IrKeepAlive.shouldUpdate(attempted)) return;
+    unawaited(IrKeepAlive.update(title: _keepAliveTitle(), text: _keepAliveText()));
+  }
+
+  Future<void> _checkKeepAliveStop() async {
+    if (_disposed || !running || paused) return;
+    if (!await IrKeepAlive.stopRequested) return;
+    if (_disposed || !running || paused) return;
+    pause();
+  }
+
+  void _stopKeepAlive() {
+    _keepAlivePoll?.cancel();
+    _keepAlivePoll = null;
+    unawaited(IrKeepAlive.stop());
   }
 }

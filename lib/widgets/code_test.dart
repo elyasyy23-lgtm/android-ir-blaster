@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:irblaster_controller/l10n/l10n.dart';
 import 'package:irblaster_controller/utils/ir.dart';
+import 'package:irblaster_controller/utils/ir_keep_alive.dart';
 
 String deviceCodeString = "00 ff";
 String commandString = "00 ff";
@@ -57,13 +58,15 @@ void bruteforce(int n, bool send) {
 }
 
 class CodeTestState extends State<CodeTest> {
+  static const String _sweepTitle = 'Signal tester running';
+
   Timer? timer;
+  int _sent = 0;
+  DateTime? _startedAt;
 
   @override
   void dispose() {
-    timer?.cancel();
-    timer = null;
-    isBruteforcing = false;
+    _stopSweep();
     super.dispose();
   }
 
@@ -76,6 +79,65 @@ class CodeTestState extends State<CodeTest> {
           "${widget.code!.substring(4, 6)} ${widget.code!.substring(6, 8)}";
     }
     super.initState();
+  }
+
+  String _currentCodeLabel() =>
+      'NEC ${deviceCodeString.trim()} ${commandString.trim()}'
+          .replaceAll(RegExp(r'\s+'), ' ');
+
+  /// Start/stop the 1 s sweep. While it runs a foreground service keeps the
+  /// isolate alive, so the sweep and the IR log continue in the background.
+  Future<void> _toggleSweep() async {
+    if (isBruteforcing) {
+      _stopSweep();
+      setState(() {});
+      return;
+    }
+    isBruteforcing = true;
+    _sent = 0;
+    _startedAt = DateTime.now();
+    setState(() {});
+    await IrKeepAlive.clearStopRequest();
+    await IrKeepAlive.start(
+      title: _sweepTitle,
+      text: '${_currentCodeLabel()} — keeps running when you leave the app',
+    );
+    timer?.cancel();
+    timer =
+        Timer.periodic(const Duration(seconds: 1), (Timer t) => _sweepTick());
+  }
+
+  void _sweepTick() {
+    if (!mounted || !isBruteforcing) return;
+    final label = _currentCodeLabel();
+    setState(() {
+      bruteforce(1, true);
+    });
+    _sent++;
+    unawaited(_pollStopRequest());
+    if (IrKeepAlive.shouldUpdate(_sent)) {
+      final elapsed =
+          DateTime.now().difference(_startedAt ?? DateTime.now()).inSeconds;
+      unawaited(IrKeepAlive.update(
+        title: _sweepTitle,
+        text: '$label · $_sent sent · ${elapsed}s',
+      ));
+    }
+  }
+
+  /// Stops the sweep when the user taps Stop in the notification.
+  Future<void> _pollStopRequest() async {
+    if (!await IrKeepAlive.stopRequested) return;
+    if (!mounted) return;
+    _stopSweep();
+    setState(() {});
+  }
+
+  void _stopSweep() {
+    timer?.cancel();
+    timer = null;
+    isBruteforcing = false;
+    unawaited(IrKeepAlive.stop());
   }
 
   @override
@@ -189,21 +251,7 @@ class CodeTestState extends State<CodeTest> {
                         iconSize: 35,
                       ),
                       IconButton(
-                        onPressed: () {
-                          setState(() {
-                            if (isBruteforcing) {
-                              timer?.cancel();
-                            } else {
-                              timer = Timer.periodic(const Duration(seconds: 1),
-                                  (Timer t) {
-                                setState(() {
-                                  bruteforce(1, true);
-                                });
-                              });
-                            }
-                            isBruteforcing = !isBruteforcing;
-                          });
-                        },
+                        onPressed: _toggleSweep,
                         icon: Icon(
                             isBruteforcing ? Icons.pause : Icons.play_arrow),
                         iconSize: 35,

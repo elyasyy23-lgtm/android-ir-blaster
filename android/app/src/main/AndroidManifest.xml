@@ -3,8 +3,13 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="org.nslabs.ir_blaster">
 
-    <!-- WorkManager is transitive; this app does not run foreground workers. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
+    <!-- Long IR tests (signal tester sweep / finder run) keep running when the
+         app is backgrounded: a foreground service shows the live progress, so the
+         permission WorkManager used to have stripped is needed again. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Declare which external ACTION_* intents your app will use -->
     <queries>
@@ -163,6 +168,15 @@
             android:exported="false" />
 
         <service android:name="androidx.work.impl.foreground.SystemForegroundService" tools:node="remove" />
+
+        <service
+            android:name=".IrKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a running IR test (signal sweep) alive in the background so signals keep being sent and logged." />
+        </service>
 
         <service
             android:name=".DeviceControlsService"

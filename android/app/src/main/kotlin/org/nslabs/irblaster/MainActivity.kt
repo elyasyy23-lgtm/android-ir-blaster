@@ -119,6 +119,7 @@ class MainActivity : FlutterActivity() {
     private var homeWidgetChannel: MethodChannel? = null
     private var pendingHomeWidgetConfigureId: Int? = null
     private var shortcutsChannel: MethodChannel? = null
+    private var keepAliveChannel: MethodChannel? = null
     private var pendingShortcutAction: String? = null
 
     private fun loadTxTypeFromPrefs(): TxType {
@@ -456,11 +457,13 @@ class MainActivity : FlutterActivity() {
         private const val QUICK_TILE_CHANNEL = "org.nslabs/irtransmitter_quick_tile"
         private const val HOME_WIDGET_CHANNEL = "org.nslabs/irtransmitter_home_widget"
         private const val SHORTCUTS_CHANNEL = "org.nslabs/app_shortcuts"
+        private const val KEEP_ALIVE_CHANNEL = "org.nslabs/ir_keep_alive"
         private const val EXTRA_SHORTCUT_ACTION = "org.nslabs.irblaster.SHORTCUT_ACTION"
         private const val DEFAULT_HEX_FREQUENCY = 38000
         private const val MIN_IR_HZ = 15000
         private const val MAX_IR_HZ = 60000
         private const val RECORD_AUDIO_PERMISSION_REQUEST = 1007
+        private const val NOTIFICATION_PERMISSION_REQUEST = 1008
     }
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
@@ -612,6 +615,35 @@ class MainActivity : FlutterActivity() {
                     val action = pendingShortcutAction
                     pendingShortcutAction = null
                     result.success(action)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        keepAliveChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, KEEP_ALIVE_CHANNEL)
+        keepAliveChannel?.setMethodCallHandler { call, result ->
+            val args = call.arguments as? Map<*, *>
+            val title = (args?.get("title") as? String)?.trim().orEmpty()
+            val text = (args?.get("text") as? String).orEmpty()
+            when (call.method) {
+                "start" -> {
+                    requestNotificationPermissionIfNeeded()
+                    IrKeepAliveService.start(applicationContext, title.ifBlank { "IR test running" }, text)
+                    result.success(true)
+                }
+                "update" -> {
+                    IrKeepAliveService.update(applicationContext, title.ifBlank { "IR test running" }, text)
+                    result.success(true)
+                }
+                "stop" -> {
+                    IrKeepAliveService.stop(applicationContext)
+                    result.success(true)
+                }
+                "isRunning" -> result.success(IrKeepAliveService.running)
+                "stopRequested" -> result.success(IrKeepAliveService.stopRequested)
+                "clearStopRequest" -> {
+                    IrKeepAliveService.clearStopRequest()
+                    result.success(true)
                 }
                 else -> result.notImplemented()
             }
@@ -1159,6 +1191,27 @@ class MainActivity : FlutterActivity() {
             "inputName" to diag.inputName,
             "currentAudioMode" to currentAudioModeOrNull()?.toInt(),
         )
+    }
+
+    /**
+     * Android 13+ hides the foreground-service notification without this permission.
+     * Denying it does not stop the service, so the result is deliberately ignored.
+     */
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            "android.permission.POST_NOTIFICATIONS",
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) return
+        try {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf("android.permission.POST_NOTIFICATIONS"),
+                NOTIFICATION_PERMISSION_REQUEST,
+            )
+        } catch (_: Throwable) {
+        }
     }
 
     private fun handleRequestAudioLearningPermission(result: MethodChannel.Result) {
